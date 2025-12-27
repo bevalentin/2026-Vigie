@@ -42,3 +42,6 @@
 *   Ensure UI components are responsive and user-friendly (using NiceGUI native components).
 *   Always put comment in the code to explain the logic.
 *   Always update the README.md, USER_GUIDE.md, and agents.md files accordingly when adding new features or modifying existing ones.
+
+## Interdictions
+*   **Pas de JavaScript** : Aucun code JavaScript ne doit être ajouté à cette application. Toutes les fonctionnalités doivent être implémentées en Python via NiceGUI ou des solutions serveur.

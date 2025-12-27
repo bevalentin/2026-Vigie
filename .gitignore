@@ -161,6 +161,7 @@ vigie.db-shm
 vigie.db-wal
 .nicegui/
 logs/
+reports/
 .python-version
 uv.lock
 C:/Users/mvalent/.gemini/

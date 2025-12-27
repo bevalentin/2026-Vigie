@@ -27,6 +27,10 @@ def lots_page():
                 desc = ui.textarea('Description')
                 
                 def save_general():
+                    if not name.value or not name.value.strip():
+                        ui.notify('Le nom du lot est obligatoire', type='negative')
+                        return
+                        
                     with next(get_session()) as session:
                         if lot_id_ref['value']:
                             lot = session.get(Lot, lot_id_ref['value'])
@@ -39,7 +43,7 @@ def lots_page():
                         session.commit()
                         lot_id_ref['value'] = lot.id # Set ID for subsections
                         ui.notify('Lot enregistré')
-                        refresh_main_table_func()
+                        refresh_main_table()
                         refresh_fractions_table() # Enable fractions tab content if needed
 
                 def delete_lot():

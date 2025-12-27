@@ -17,7 +17,7 @@ def generate_operations_csv(operations: List[Operation]) -> str:
             op.lot.name if op.lot else "?",
             op.bank_account.name if op.bank_account else "?",
             op.type.value,
-            op.category.value,
+            op.category_ref.name if op.category_ref else "-",
             op.label,
             str(op.amount),
             paid_by
