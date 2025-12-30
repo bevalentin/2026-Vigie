@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY pyproject.toml .
 
-RUN mkdir reports && \
+RUN apt -y update && \
+    apt install -y fonts-dejavu && \
+    rm -rf /var/lib/apt/lists/* && \
     pip install .
 
 COPY app app/
