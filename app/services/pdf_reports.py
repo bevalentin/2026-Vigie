@@ -9,7 +9,7 @@ import os
 
 class AnnualReportPDF(FPDF):
     def __init__(self):
-        super().__init__()
+        super().__init__(orientation='L')
         # Load DejaVuSans for full Unicode support (€, accents, etc.)
         font_dir = "/usr/share/fonts/truetype/dejavu"
         regular = os.path.join(font_dir, "DejaVuSans.ttf")
@@ -30,7 +30,7 @@ class AnnualReportPDF(FPDF):
         if self.page_no() == 1:
             # Stylish Top Bar
             self.set_fill_color(63, 81, 181) # Indigo 600
-            self.rect(0, 0, 210, 40, "F")
+            self.rect(0, 0, 297, 40, "F")
             
             self.set_xy(10, 10)
             self.set_font(self.font_family_main, "B", 24)
@@ -126,9 +126,9 @@ def generate_owner_annual_report(session: Session, owner_id: int, year: int) -> 
     # Background
     curr_y = pdf.get_y()
     pdf.set_fill_color(248, 250, 252) # Slate 50
-    pdf.rect(10, curr_y, 190, 40, "F")
+    pdf.rect(10, curr_y, 277, 26, "F")
     pdf.set_draw_color(226, 232, 240) # Slate 200
-    pdf.rect(10, curr_y, 190, 40, "D")
+    pdf.rect(10, curr_y, 277, 26, "D")
     
     pdf.set_xy(15, curr_y + 5)
     pdf.set_font(pdf.font_family_main, "B", 10)
@@ -149,7 +149,7 @@ def generate_owner_annual_report(session: Session, owner_id: int, year: int) -> 
     pdf.set_text_color(*color)
     pdf.cell(60, 10, format_currency(net_balance, show_sign=True), ln=True)
     
-    pdf.set_y(curr_y + 45)
+    pdf.set_y(curr_y + 32)
 
     # --- Tableau des Opérations ---
     pdf.set_font(pdf.font_family_main, "B", 12)
@@ -162,10 +162,11 @@ def generate_owner_annual_report(session: Session, owner_id: int, year: int) -> 
     pdf.set_text_color(71, 85, 105) # Slate 600
     pdf.set_font(pdf.font_family_main, "B", 9)
     
-    pdf.cell(25, 10, "DATE", border=1, align="C", fill=True)
-    pdf.cell(70, 10, "LIBELLÉ / LOT", border=1, align="L", fill=True)
+    pdf.cell(30, 10, "DATE", border=1, align="C", fill=True)
+    pdf.cell(142, 10, "LIBELLÉ", border=1, align="L", fill=True)
+    pdf.cell(35, 10, "LOT", border=1, align="L", fill=True)
     pdf.cell(35, 10, "CATÉGORIE", border=1, align="C", fill=True)
-    pdf.cell(60, 10, "MONTANT DE LA PART", border=1, align="R", fill=True)
+    pdf.cell(35, 10, "MONTANT (PART)", border=1, align="R", fill=True)
     pdf.ln()
 
     # Lignes
@@ -173,7 +174,7 @@ def generate_owner_annual_report(session: Session, owner_id: int, year: int) -> 
     pdf.set_text_color(15, 23, 42)
     
     for i, d in enumerate(details):
-        if pdf.get_y() > 275:
+        if pdf.get_y() > 180:
             pdf.add_page()
             # On ne remet pas l'en-tête ici pour l'instant pour gagner de la place, 
             # mais fpdf le gérerait avec une méthode dédiée si besoin.
@@ -181,14 +182,18 @@ def generate_owner_annual_report(session: Session, owner_id: int, year: int) -> 
         fill = (i % 2 == 1)
         pdf.set_fill_color(252, 253, 254) # Presque blanc pour alternance
         
-        pdf.cell(25, 8, d["date"], border="B", align="C", fill=fill)
+        pdf.cell(30, 8, d["date"], border="B", align="C", fill=fill)
         
-        # Concat libellé et lot pour gagner de la place horizontalement
-        txt = f"{d['label']} ({d['lot']})"
-        if len(txt) > 45: txt = txt[:42] + "..."
-        pdf.cell(70, 8, txt, border="B", fill=fill)
+        # Libellé
+        txt = d['label']
+        if len(txt) > 60: txt = txt[:64] + "..."
+        pdf.cell(142, 8, txt, border="B", fill=fill)
+
+        # Lot
+        lot_txt = d['lot'][:23]
+        pdf.cell(35, 8, lot_txt, border="B", fill=fill)
         
-        cat = d["category"][:20]
+        cat = d["category"][:30]
         pdf.cell(35, 8, cat, border="B", align="C", fill=fill)
         
         if d["is_income"]:
@@ -198,7 +203,7 @@ def generate_owner_annual_report(session: Session, owner_id: int, year: int) -> 
             pdf.set_text_color(225, 29, 72)
             val = f"- {format_currency(d['amount'])}"
             
-        pdf.cell(60, 8, val, border="B", align="R", fill=fill)
+        pdf.cell(35, 8, val, border="B", align="R", fill=fill)
         pdf.set_text_color(15, 23, 42)
         pdf.ln()
 
