@@ -13,30 +13,31 @@ def operations_page():
     # State
     op_id_ref = {'value': None}
     
+    # Load helpers (Shared for Filters and Dialog)
+    lots_map = {}
+    accounts_map = {}
+    owners_map = {}
+    categories_map = {}
+    reversement_ids = set()
+
+    with next(get_session()) as session:
+        lots = session.exec(select(Lot)).all()
+        lots_map = {l.id: l.name for l in lots}
+        
+        accs = session.exec(select(BankAccount)).all()
+        accounts_map = {a.id: a.name for a in accs}
+        
+        owners = session.exec(select(Owner)).all()
+        owners_map = {o.id: o.name for o in owners}
+
+        from app.models.domain import Category
+        cats = session.exec(select(Category)).all()
+        categories_map = {c.id: c.name for c in cats}
+        reversement_ids = {c.id for c in cats if c.is_reversement}
+    
     # --- DIALOG ---
     with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
         ui.label('Opération').classes('text-xl font-bold mb-4')
-        
-        # Load helpers
-        lots_map = {}
-        accounts_map = {}
-        owners_map = {}
-        categories_map = {}
-        
-        with next(get_session()) as session:
-            lots = session.exec(select(Lot)).all()
-            lots_map = {l.id: l.name for l in lots}
-            
-            accs = session.exec(select(BankAccount)).all()
-            accounts_map = {a.id: a.name for a in accs}
-            
-            owners = session.exec(select(Owner)).all()
-            owners_map = {o.id: o.name for o in owners}
-
-            from app.models.domain import Category
-            cats = session.exec(select(Category)).all()
-            categories_map = {c.id: c.name for c in cats}
-            reversement_ids = {c.id for c in cats if c.is_reversement}
 
         if not lots_map or not accounts_map:
             ui.label("Veuillez d'abord créer des Lots et des Comptes Bancaires.").classes('text-red-400')
@@ -260,10 +261,83 @@ def operations_page():
                     del_op_btn.visible = True
                     dialog.open()
 
-        if can_edit:
-            with ui.row().classes('gap-2 mb-4'):
-                ui.button('Opération Simple', on_click=open_create, icon='add').classes('bg-emerald-500 text-white')
-                ui.button('Virement', on_click=open_transfer, icon='swap_horiz').classes('bg-cyan-600 text-white')
+        # --- FILTER DIALOG ---
+        today = date.today()
+        jan_1 = date(today.year-1, 1, 1)
+
+        filter_state = {
+            'lot': None,
+            'acc': None,
+            'type': None,
+            'cat': None,
+            'start': jan_1.isoformat(),
+            'end': today.isoformat(),
+            'label': '',
+        }
+        
+        with ui.dialog() as filter_dialog, ui.card().classes('w-full max-w-lg'):
+            ui.label('Filtres de recherche').classes('text-xl font-bold mb-4')
+            
+            log_action(None, "DEBUG", f"Filter state: {filter_state}")
+
+            # Form
+            with ui.column().classes('w-full gap-4'):
+                f_label = ui.input('Libellé (contient)', value=filter_state['label']).bind_value(filter_state, 'label').classes('w-full')
+                # Temporary workaround for bind_value not working with input fields:
+                # https://github.com/zauberzeug/nicegui/issues/2149#issuecomment-2507225590
+                f_label.LOOPBACK = True
+
+                with ui.grid(columns=2).classes('w-full gap-4'):
+                    f_start = ui.input('Date Début', value=filter_state['start']).bind_value(filter_state, 'start').props('type=date')
+                    f_start.LOOPBACK = True  # Same workaround
+                    f_end = ui.input('Date Fin', value=filter_state['end']).bind_value(filter_state, 'end').props('type=date')
+                    f_end.LOOPBACK = True  # Same workaround
+                
+                f_lot = ui.select(lots_map, label='Lot', clearable=True, value=filter_state['lot']).bind_value(filter_state, 'lot').classes('w-full')
+                f_acc = ui.select(accounts_map, label='Compte', clearable=True, value=filter_state['acc']).bind_value(filter_state, 'acc').classes('w-full')
+                f_type = ui.select([t.value for t in OperationType], label='Type', clearable=True, value=filter_state['type']).bind_value(filter_state, 'type').classes('w-full')
+                f_cat = ui.select(categories_map, label='Catégorie', clearable=True, value=filter_state['cat']).bind_value(filter_state, 'cat').classes('w-full')
+            
+            
+            
+            def reset_filters():
+                f_label.value = ''
+                f_start.value = jan_1.isoformat()
+                f_end.value = today.isoformat()
+                f_lot.value = None
+                f_acc.value = None
+                f_type.value = None
+                f_cat.value = None
+
+            with ui.row().classes('w-full justify-between mt-4'):
+                ui.button('Réinitialiser', on_click=reset_filters).props('flat color=grey')
+                with ui.row().classes('gap-2'):
+                    ui.button('Fermer', on_click=filter_dialog.close).props('flat')
+                    ui.button('Appliquer', on_click=lambda: [refresh_table(), filter_dialog.close()]).classes('bg-primary text-white')
+
+        # Toolbar
+        with ui.row().classes('w-full gap-2 mb-4 justify-between'):
+            with ui.row().classes('gap-2'):
+                if can_edit:
+                    ui.button('Opération Simple', on_click=open_create, icon='add').classes('bg-emerald-500 text-white')
+                    ui.button('Virement', on_click=open_transfer, icon='swap_horiz').classes('bg-cyan-600 text-white')
+            
+            filter_btn = ui.button('Filtres', icon='filter_list', on_click=filter_dialog.open).classes('bg-slate-500 text-white')
+            
+            def update_filter_indicator():
+                 is_filtered = (
+                     filter_state['lot'] is not None or
+                     filter_state['acc'] is not None or
+                     filter_state['type'] is not None or
+                     filter_state['cat'] is not None or
+                     filter_state['label'] != '' or
+                     filter_state['start'] != jan_1.isoformat() or
+                     filter_state['end'] != today.isoformat()
+                 )
+                 if is_filtered:
+                     filter_btn.classes('bg-orange-500', remove='bg-slate-500').props('icon=filter_list_alt')
+                 else:
+                     filter_btn.classes('bg-slate-500', remove='bg-orange-500').props('icon=filter_list')
         
         columns = [
             {'name': 'date', 'label': 'Date', 'field': 'date', 'align': 'left', 'sortable': True},
@@ -271,7 +345,7 @@ def operations_page():
             {'name': 'amount', 'label': 'Montant', 'field': 'amount_fmt', 'align': 'right'},
             {'name': 'lot', 'label': 'Lot', 'field': 'lot_name', 'align': 'left'},
             {'name': 'bank_account', 'label': 'Compte', 'field': 'bank_account_name', 'align': 'left'},
-            {'name': 'type', 'label': 'Type', 'field': 'type', 'align': 'left'},
+            {'name': 'category', 'label': 'Catégorie', 'field': 'category_name', 'align': 'left'},
             {'name': 'actions', 'label': 'Actions', 'field': 'id'},
         ]
         
@@ -290,28 +364,50 @@ def operations_page():
             table.on('edit', lambda e: open_edit(e.args))
 
         def refresh_table():
-             with next(get_session()) as session:
-                 # Join would be better but keeping it simple
-                 ops = session.exec(select(Operation).order_by(Operation.date.desc())).all()
-                 rows = []
-                 for o in ops: # Lazy load refs
-                     l_name = o.lot.name if o.lot else "-"
-                     acc_name = o.bank_account.name if o.bank_account else "?"
-                     # Amount color
-                     sign = -1 if o.type == OperationType.SORTIE else 1
-                     amt_fmt = format_currency(o.amount * sign, show_sign=True)
+            update_filter_indicator()
+            log_action(None, "DEBUG", f"Filter state: {filter_state}")
+
+            with next(get_session()) as session:
+                query = select(Operation)
+                 
+                # Apply Filters
+                if filter_state['lot']:
+                    query = query.where(Operation.lot_id == filter_state['lot'])
+                if filter_state['acc']:
+                    query = query.where(Operation.bank_account_id == filter_state['acc'])
+                if filter_state['type']:
+                    query = query.where(Operation.type == OperationType(filter_state['type']))
+                if filter_state['cat']:
+                    query = query.where(Operation.category_id == filter_state['cat'])
+                if filter_state['start']:
+                    query = query.where(Operation.date >= date.fromisoformat(filter_state['start']))
+                if filter_state['end']:
+                    query = query.where(Operation.date <= date.fromisoformat(filter_state['end']))
+                if filter_state['label']:
+                    # Case insensitive search
+                    log_action(None, "DEBUG", f"Apply label filter: {filter_state['label']}")
+                    query = query.where(Operation.label.ilike(f"%{filter_state['label']}%"))
+
+                ops = session.exec(query.order_by(Operation.date.desc())).all()
+                rows = []
+                for o in ops: # Lazy load refs
+                    l_name = o.lot.name if o.lot else "-"
+                    acc_name = o.bank_account.name if o.bank_account else "?"
+                    # Amount color
+                    sign = -1 if o.type == OperationType.SORTIE else 1
+                    amt_fmt = format_currency(o.amount * sign, show_sign=True)
                           
-                     rows.append({
-                         'id': o.id,
-                         'date': o.date.isoformat(),
-                         'label': o.label,
-                         'amount_fmt': amt_fmt,
-                         'lot_name': l_name,
-                         'bank_account_name': acc_name,
-                         'type': o.type,
-                     })
-                 table.rows = rows
-                 table.update()
+                    rows.append({
+                        'id': o.id,
+                        'date': o.date.isoformat(),
+                        'label': o.label,
+                        'amount_fmt': amt_fmt,
+                        'lot_name': l_name,
+                        'bank_account_name': acc_name,
+                        'category_name': categories_map.get(o.category_id, "?"),
+                    })
+                table.rows = rows
+                table.update()
                  
         refresh_table()
         global refresh_ops_ref
