@@ -278,8 +278,6 @@ def operations_page():
         with ui.dialog() as filter_dialog, ui.card().classes('w-full max-w-lg'):
             ui.label('Filtres de recherche').classes('text-xl font-bold mb-4')
             
-            log_action(None, "DEBUG", f"Filter state: {filter_state}")
-
             # Form
             with ui.column().classes('w-full gap-4'):
                 f_label = ui.input('Libellé (contient)', value=filter_state['label']).bind_value(filter_state, 'label').classes('w-full')
@@ -365,7 +363,6 @@ def operations_page():
 
         def refresh_table():
             update_filter_indicator()
-            log_action(None, "DEBUG", f"Filter state: {filter_state}")
 
             with next(get_session()) as session:
                 query = select(Operation)
@@ -385,7 +382,6 @@ def operations_page():
                     query = query.where(Operation.date <= date.fromisoformat(filter_state['end']))
                 if filter_state['label']:
                     # Case insensitive search
-                    log_action(None, "DEBUG", f"Apply label filter: {filter_state['label']}")
                     query = query.where(Operation.label.ilike(f"%{filter_state['label']}%"))
 
                 ops = session.exec(query.order_by(Operation.date.desc())).all()
